@@ -475,9 +475,7 @@ document.addEventListener('click',function(e){
 <!-- 画规浮层（iframe 内嵌参考站） -->
 <div id="drawOverlay" style="position:fixed;inset:0;z-index:350;background:#c8e6c9;flex-direction:column;opacity:0;visibility:hidden;transition:opacity 0.15s ease,visibility 0.15s">
   <iframe id="drawFrame" src="https://static.shichaisz.com/xcxweb/index.html#/drawRule3/2?from=seo" style="flex:1;width:100%;height:100%;border:0;background:#c8e6c9"></iframe>
-  <div id="drawTopBar" style="position:absolute;top:0;left:0;z-index:10;transition:opacity 0.3s">
-    <button onclick="closeDraw()" style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border:none;border-radius:0;background:transparent;color:transparent;font-size:1px;cursor:pointer;padding:0;margin:0">✕</button>
-  </div>
+  <div id="drawEdge" style="position:absolute;left:0;top:0;bottom:0;width:25px;z-index:20;background:transparent"></div>
 </div>
 
 <script>
@@ -1505,7 +1503,6 @@ document.addEventListener('click',function(e){
     var ov=document.getElementById('drawOverlay');
     ov.style.visibility='visible';
     ov.style.opacity='1';
-    history.pushState({drawOpen:1},'');
     document.body.style.overflow='hidden';
   }
   function closeDraw(instant){
@@ -1519,10 +1516,37 @@ document.addEventListener('click',function(e){
     },instant?0:150);
     document.body.style.overflow='';
   }
+  window.drawBack=function(){
+    var fr=document.getElementById('drawFrame');
+    try{
+      fr.contentWindow.history.back();
+    }catch(e){
+      fr.src='https://static.shichaisz.com/xcxweb/index.html#/drawRule3/2?from=seo';
+    }
+  };
+  // 画规左边缘滑动返回
+  (function(){
+    var edge=document.getElementById('drawEdge');
+    var sx=0,sy=0,tracking=false;
+    edge.addEventListener('touchstart',function(e){
+      var t=e.touches[0];sx=t.clientX;sy=t.clientY;tracking=true;
+    },{passive:true});
+    edge.addEventListener('touchmove',function(e){
+      if(!tracking)return;
+      var t=e.touches[0];
+      var dx=t.clientX-sx,dy=t.clientY-sy;
+      if(dx>30&&Math.abs(dy)<100){edge.style.transform='translateX('+dx+'px)';}
+    },{passive:true});
+    edge.addEventListener('touchend',function(e){
+      if(!tracking)return;tracking=false;
+      edge.style.transform='';
+      var t=e.changedTouches[0];
+      var dx=t.clientX-sx,dy=t.clientY-sy;
+      if(dx>60&&Math.abs(dy)<80){drawBack();}
+    },{passive:true});
+  })();
   // 微信/浏览器返回：如果有遮罩打开则关闭，否则自然返回
   window.addEventListener('popstate',function(){
-    var ov=document.getElementById('drawOverlay');
-    if(ov&&ov.style.visibility==='visible'){closeDraw(true);return;}
     var sp=document.getElementById('settingsPage');
     if(sp&&sp.style.display!=='none'){
       sp.style.opacity='0';
