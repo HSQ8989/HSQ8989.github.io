@@ -191,6 +191,14 @@
   </div>
 </div>
 
+<div id="splash" style="position:fixed;inset:0;background:#fff;z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:opacity .3s">
+  <img src="icon-192.PNG" style="width:80px;height:80px;border-radius:18px" alt="好彩今日">
+  <div style="margin-top:12px;font-size:16px;font-weight:600;color:#c62828">好彩今日</div>
+  <div style="margin-top:8px;width:120px;height:3px;background:#f0f0f0;border-radius:2px;overflow:hidden"><div style="width:40%;height:100%;background:#c62828;border-radius:2px;animation:slide 1s infinite"></div></div>
+</div>
+<style>@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}</style>
+<script>window.addEventListener('load',function(){setTimeout(function(){var s=document.getElementById('splash');if(s){s.style.opacity='0';setTimeout(function(){s.remove();},300);}},200);});</script>
+
 <div class="header-fixed">
   <div class="nav-bar">
     <span id="syncDot" style="width:6px;height:6px;border-radius:50%;background:#ffc107;box-shadow:0 0 6px #ffc107;display:inline-block;flex-shrink:0"></span>
