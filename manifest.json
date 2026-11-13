@@ -1,17 +1,25 @@
 {
-  "name": "好彩今日·排列五",
+  "name": "好彩今日",
   "short_name": "好彩今日",
-  "start_url": "./",
-  "scope": "./",
+  "description": "排列五开奖结果走势查询",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#eaf5ec",
-  "theme_color": "#4caf50",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#c62828",
+  "lang": "zh-CN",
   "icons": [
     {
-      "src": "icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "src": "icon-192.PNG",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.PNG",
+      "sizes": "512x512",
+      "type": "image/png"
     }
   ]
 }
