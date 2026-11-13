@@ -1,4 +1,4 @@
-const CACHE='hc-v1';
+const CACHE='hc-v2';
 const ASSETS=['/','/index.html','/manifest.json','/icon-192.PNG','/icon-512.PNG','/data.json'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting()));
