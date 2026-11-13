@@ -1587,6 +1587,7 @@ function showInstallTips(){
 }
 setTimeout(function(){
   if(window.navigator.standalone||window.matchMedia('(display-mode: standalone)').matches)return;
+  if(/MicroMessenger|wechat|wxwork/i.test(navigator.userAgent))return;
   if(isIOS()){
     document.getElementById('installBannerDesc').textContent='添加到主屏幕，像App一样全屏使用';
   }else{
