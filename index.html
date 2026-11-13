@@ -1278,7 +1278,9 @@ document.addEventListener('click',function(e){
   var lastFetchTs=0;
   async function autoFetchLottery(){
     var now=Date.now();
-    if(now-lastFetchTs<30000)return;
+    var h=new Date().getHours(),m=new Date().getMinutes();
+    var fast=(h===21&&m>=19&&m<50);
+    if(now-lastFetchTs<(fast?5000:60000))return;
     lastFetchTs=now;
     // 先读GitHub Pages上的data.json
     try{
@@ -1391,6 +1393,8 @@ document.addEventListener('click',function(e){
   // 每 8 秒拉一次远端，多设备同步
   setInterval(function(){if(!document.hidden)pull(false);},8000);
   setInterval(function(){render();},60000);
+  // 每5秒检查data.json更新（开奖时段），其他时段60秒
+  setInterval(function(){if(!document.hidden)autoFetchLottery();},5000);
   // 开奖时段 21:25-21:45 每秒补号，其他时段不抓取
   function isDrawTime(){var h=new Date().getHours(),m=new Date().getMinutes();return h===21&&m>=25&&m<45;}
   function scheduleAutoFetch(){
