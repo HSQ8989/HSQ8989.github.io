@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<rect width="512" height="512" rx="112" fill="#2e7d32"/>
+<circle cx="256" cy="256" r="184" fill="#fff" opacity=".14"/>
+<text x="256" y="220" font-size="104" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="700">好彩</text>
+<text x="256" y="342" font-size="82" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="700">今日</text></svg>
