@@ -217,7 +217,7 @@ setTimeout(hideSplash,3000);</script>
       <button onclick="document.getElementById('settingsToggle').click()" title="工具" style="height:24px;padding:0 10px;border-radius:12px;border:none;background:rgba(120,120,128,0.15);color:#1b5e20;font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:3px;flex-shrink:0;scroll-snap-align:start"><span class="gear-icon" style="font-size:12px">⚙</span>工具</button>
     </div>
     <button class="search-toggle" id="searchToggle" title="搜索"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.8"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
-    <div class="nav-expand-info" id="navExpandInfo">好彩今日 · 排列五走势<br><span id="nextDrawInfo">下期开奖：--</span><br><span id="suspendInfo" style="color:#ff9500"></span></div>
+    <div class="nav-expand-info" id="navExpandInfo">好彩今日 · 排列五走势<br><span id="nextDrawInfo">下期开奖：--</span><br><span id="bjClock" style="font-size:12px;color:#666"></span><br><span id="suspendInfo" style="color:#ff9500"></span></div>
   </div>
   <div class="filter-bar">
     <input type="text" id="searchInput" placeholder="搜索期号或号码..." />
@@ -818,8 +818,22 @@ document.addEventListener('click',function(e){
   updateTvLabel();
   updateNextDrawInfo();
   setInterval(function(){updateTvLabel();updateNextDrawInfo();},60000);
-  // 预加载直播iframe，点击秒开
-  setTimeout(function(){try{document.getElementById('liveFrame').src='https://appstatic.sporttery.cn/dl/h5/live/index/index.html';}catch(e){}},3000);
+  // 北京时间同步
+  var timeOffset=0;
+  function syncTime(){
+    fetch('data.json?t='+Date.now(),{method:'HEAD',cache:'no-store'}).then(function(r){
+      var serverTime=new Date(r.headers.get('date')).getTime();
+      timeOffset=serverTime-Date.now();
+    }).catch(function(){});
+  }
+  syncTime();setInterval(syncTime,300000);
+  function tickClock(){
+    var now=new Date(Date.now()+timeOffset);
+    var str=now.toLocaleTimeString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false});
+    var el=document.getElementById('bjClock');
+    if(el)el.textContent='🕐 北京时间 '+str;
+  }
+  tickClock();setInterval(tickClock,1000);
   var tvState='idle';
   document.getElementById('tvBtn').addEventListener('click',function(e){
     e.stopPropagation();e.preventDefault();
@@ -828,11 +842,28 @@ document.addEventListener('click',function(e){
   window.openLive=function(){
     var ov=document.getElementById('liveOverlay');ov.style.display='flex';
     var fr=document.getElementById('liveFrame');
-    if(fr.src==='about:blank'||!fr.src){fr.src='https://appstatic.sporttery.cn/dl/h5/live/index/index.html';}
+    // 只在直播时段加载iframe
+    var h=new Date().getHours(),m=new Date().getMinutes();
+    var isLive=(h===21&&m>=20&&m<50);
+    if(isLive){
+      if(fr.src==='about:blank'||!fr.src||fr.src.indexOf('appstatic')<0){fr.src='https://appstatic.sporttery.cn/dl/h5/live/index/index.html';}
+    }else{
+      fr.src='about:blank';
+      // 显示友好提示
+      var tip=document.getElementById('liveTip');
+      if(!tip){
+        tip=document.createElement('div');tip.id='liveTip';
+        tip.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;text-align:center;z-index:10;font-size:15px;line-height:2';
+        ov.appendChild(tip);
+      }
+      tip.innerHTML='📺 当前非直播时段<br><span style="font-size:13px;color:#999">每天晚上 21:25-21:35 开奖直播</span>';
+      tip.style.display='block';
+    }
   };
   window.closeLive=function(){
     document.getElementById('liveOverlay').style.display='none';
     document.getElementById('liveFrame').src='about:blank';
+    var tip=document.getElementById('liveTip');if(tip)tip.style.display='none';
   };
 
   // ===== AI 预测（基于历史频率统计）=====
