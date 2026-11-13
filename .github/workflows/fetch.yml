@@ -2,71 +2,72 @@ name: Auto Fetch Lottery
 
 on:
   schedule:
-    # 21:20北京时间启动，脚本内部每3秒轮询
     - cron: '20 13 * * *'
-    # 每天早上9点确认昨晚结果
     - cron: '0 1 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch and push
+      - uses: actions/checkout@v4
+      - name: Fetch and save
         run: |
           python3 << 'PYEOF'
-          import json, time, urllib.request
+          import json, time, urllib.request, os
           from datetime import datetime
 
-          NTFY_URL = "https://ntfy.sh/hg_2c3d8462442e652bee537f991b281e7b"
-          SECRET = "hcX9kQ2vLmP4sT8wY7nB3jR6fD1gK5zU"
           API_URL = "https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry?gameNo=350133&provinceId=0&pageSize=500&isVerify=1&pageNo=1"
 
-          def sign(s):
-              h = 5381
-              for ch in s:
-                  h = ((h << 5) + h) ^ ord(ch)
-                  h &= 0xffffffff
-              return ''.join(format((h >> (i*8)) & 0xff, '02x') for i in range(4))
-
-          def fetch_and_push():
+          def fetch_data():
               req = urllib.request.Request(API_URL, headers={
                   'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
                   'Referer': 'https://www.sporttery.cn/'
               })
               with urllib.request.urlopen(req, timeout=15) as resp:
-                  data = json.loads(resp.read())
+                  return json.loads(resp.read())
+
+          def save_json(data):
               rows = []
-              for item in data['value']['list'][:30]:
+              for item in data['value']['list'][:50]:
                   qh = item['lotteryDrawNum']
                   nums = item['lotteryDrawResult'].split(' ')
                   dt = item['lotteryDrawTime']
                   d = datetime.strptime(dt[:10], '%Y-%m-%d')
                   wd = ['日','一','二','三','四','五','六'][(d.weekday()+1)%7]
                   ds = dt[5:7] + '/' + dt[8:10] + ' ' + wd
-                  n = ''.join(nums[:4])
-                  s = nums[4]
-                  rows.append(qh + '|' + ds + '|' + n + '|' + s)
-              rs = ';'.join(rows)
-              ts = int(time.time() * 1000)
-              send = {"t": "排列五", "bt": "好彩今日", "rs": rs, "ts": ts}
-              send["sig"] = sign(json.dumps({k: send[k] for k in ['t','bt','rs','ts']}, separators=(',',':')) + SECRET)
-              req2 = urllib.request.Request(NTFY_URL, data=json.dumps(send).encode(), headers={'Content-Type': 'application/json'})
-              with urllib.request.urlopen(req2, timeout=10) as resp:
-                  print(f"[{datetime.now().strftime('%H:%M:%S')}] Pushed: {rows[0] if rows else 'none'}")
-              return rows[0].split('|')[0] if rows else None
+                  rows.append({"q": qh, "d": ds, "n": nums[:4], "s": nums[4]})
+              out = {"rows": rows, "ts": int(time.time()*1000)}
+              with open('data.json', 'w') as f:
+                  json.dump(out, f, ensure_ascii=False)
+              return rows[0]['q'] if rows else None
 
-          last_q = fetch_and_push()
+          try:
+              data = fetch_data()
+              last_q = save_json(data)
+              print(f"[first] {last_q}")
+          except Exception as e:
+              print(f"Error: {e}")
+              last_q = None
 
-          # 每3秒轮询一次，持续25分钟（21:20-21:45）
           start = time.time()
           while time.time() - start < 1500:
-              time.sleep(3)
+              time.sleep(5)
               try:
-                  cur_q = fetch_and_push()
+                  data = fetch_data()
+                  cur_q = save_json(data)
                   if cur_q and cur_q != last_q:
-                      print(f"新号: {cur_q}")
+                      print(f"new: {cur_q}")
                       last_q = cur_q
               except Exception as e:
-                  print(f"Error: {e}")
+                  print(f"poll error: {e}")
+
+          os.system('git config user.email "bot@haocai.com"')
+          os.system('git config user.name "haocai-bot"')
+          os.system('git add data.json')
+          os.system('git diff --staged --quiet || git commit -m "update data"')
+          os.system('git push')
           PYEOF
