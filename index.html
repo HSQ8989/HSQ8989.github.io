@@ -1278,63 +1278,77 @@ document.addEventListener('click',function(e){
   var lastFetchTs=0;
   async function autoFetchLottery(){
     var now=Date.now();
-    if(now-lastFetchTs<30000)return; // 30秒内不重复请求
+    if(now-lastFetchTs<30000)return;
     lastFetchTs=now;
-    var directUrl='https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry?gameNo=350133&provinceId=0&pageSize=500&isVerify=1&pageNo=1';
-    var d=null;
-    // 先直连（微信WebView无CORS限制）
+    // 先读GitHub Pages上的data.json
     try{
       var c=new AbortController();var t=setTimeout(function(){c.abort();},8000);
-      var r=await fetch(directUrl,{signal:c.signal,cache:'no-store'});
+      var r=await fetch('data.json?t='+Date.now(),{signal:c.signal,cache:'no-store'});
       clearTimeout(t);
-      if(r.ok)d=await r.json();
+      if(r.ok){
+        var dj=await r.json();
+        if(dj.rows&&dj.rows.length){
+          var changed=false;
+          var existing={};
+          for(var i=0;i<S.r.length;i++){if(S.r[i].q)existing[S.r[i].q]=S.r[i];}
+          for(var j=0;j<dj.rows.length;j++){
+            var row=dj.rows[j];
+            if(existing[row.q]){
+              if(!existing[row.q].n[0]&&row.n[0]){existing[row.q].n=row.n;existing[row.q].s=row.s;changed=true;}
+            }else{
+              S.r.push({q:row.q,d:row.d,n:row.n.slice(),s:row.s});
+              changed=true;
+            }
+          }
+          if(changed){
+            S.r.sort(function(a,b){return String(a.q).localeCompare(String(b.q));});
+            ensureEmptyRows();
+            var lq=getLatestQ();if(lq)markRecent(lq);
+            save();render();pk();
+          }
+          return;
+        }
+      }
     }catch(e){}
-    // 直连失败走Netlify函数代理（浏览器）
-    if(!d||!d.value||!d.value.list){
-      try{
-        var c2=new AbortController();var t2=setTimeout(function(){c2.abort();},10000);
-        var r2=await fetch('/api/lottery',{signal:c2.signal,cache:'no-store'});
-        clearTimeout(t2);
-        if(r2.ok)d=await r2.json();
-      }catch(e){}
-    }
-    if(!d||!d.value||!d.value.list)return;
-      var list=d.value.list;
-      var W=['日','一','二','三','四','五','六'];
-      var existing={};
-      for(var i=0;i<S.r.length;i++){if(S.r[i].q)existing[S.r[i].q]=S.r[i];}
-      var changed=false;
-      for(var j=0;j<list.length;j++){
-        var item=list[j];
-        var qh=item.lotteryDrawNum;
-        var nums=item.lotteryDrawResult.split(' ');
-        var dt=item.lotteryDrawTime;
-        var y=parseInt(dt.substring(0,4)),mo=parseInt(dt.substring(5,7))-1,da=parseInt(dt.substring(8,10));
-        var wd=new Date(y,mo,da).getDay();
-        var ds=dt.substring(5,7)+'/'+dt.substring(8,10)+' '+W[wd];
-        if(existing[qh]){
-          var row=existing[qh];
-          if(!row.n[0]&&nums[0]){row.n=[nums[0],nums[1],nums[2],nums[3]];row.s=nums[4];changed=true;}
-          if(row.d!==ds){row.d=ds;changed=true;}
-        }else{
-          S.r.push({q:qh,d:ds,n:[nums[0],nums[1],nums[2],nums[3]],s:nums[4]});
-          changed=true;
+    // 微信WebView直连API
+    try{
+      var directUrl='https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry?gameNo=350133&provinceId=0&pageSize=500&isVerify=1&pageNo=1';
+      var c2=new AbortController();var t2=setTimeout(function(){c2.abort();},8000);
+      var r2=await fetch(directUrl,{signal:c2.signal,cache:'no-store'});
+      clearTimeout(t2);
+      if(r2.ok){
+        var d=await r2.json();
+        if(d&&d.value&&d.value.list){
+          var list=d.value.list;
+          var changed=false;
+          var existing2={};
+          for(var i=0;i<S.r.length;i++){if(S.r[i].q)existing2[S.r[i].q]=S.r[i];}
+          for(var j=0;j<list.length;j++){
+            var item=list[j];
+            var qh=item.lotteryDrawNum;
+            var nums=item.lotteryDrawResult.split(' ');
+            var dt=item.lotteryDrawTime;
+            var y=parseInt(dt.substring(0,4)),mo=parseInt(dt.substring(5,7))-1,da=parseInt(dt.substring(8,10));
+            var wd=new Date(y,mo,da).getDay();
+            var W=['日','一','二','三','四','五','六'];
+            var ds=dt.substring(5,7)+'/'+dt.substring(8,10)+' '+W[wd];
+            if(existing2[qh]){
+              if(!existing2[qh].n[0]&&nums[0]){existing2[qh].n=[nums[0],nums[1],nums[2],nums[3]];existing2[qh].s=nums[4];changed=true;}
+              if(existing2[qh].d!==ds){existing2[qh].d=ds;changed=true;}
+            }else{
+              S.r.push({q:qh,d:ds,n:[nums[0],nums[1],nums[2],nums[3]],s:nums[4]});
+              changed=true;
+            }
+          }
+          if(changed){
+            S.r.sort(function(a,b){return String(a.q).localeCompare(String(b.q));});
+            ensureEmptyRows();
+            var lq2=getLatestQ();if(lq2)markRecent(lq2);
+            save();render();pk();
+          }
         }
       }
-      if(changed){
-        S.r.sort(function(a,b){return String(a.q).localeCompare(String(b.q));});
-        ensureEmptyRows();
-        var lq=getLatestQ();if(lq)markRecent(lq);
-        save();render();
-        maybeNotifyNewDraw();
-        updateTvLabel();
-        updateNextDrawInfo();
-        var latest=getLatestFilled();
-        if(latest&&latest.n&&latest.n[0]!==''){
-          islandShow('🎉 新号 '+latest.n.join('')+latest.s,4000);
-        }
-        pk();
-      }
+    }catch(e){}
   }
   function ensureEmptyRows(){while(S.r.length>0&&S.r[S.r.length-1].q==='')S.r.pop();S.r.push({q:'',d:'',n:['','','',''],s:''});}
   var pushing=false,dirtyPush=false;
