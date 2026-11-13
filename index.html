@@ -1348,29 +1348,135 @@ document.addEventListener('click',function(e){
     if(st==='ok'&&prev==='err')playSnd(sndOk);
   }
 
-  // 旧 ntfy 同步通道已停用，避免在公开前端暴露 topic/secret。
-  // 本版保留本机保存；Supabase 多设备同步需在取得项目配置后另行接通。
-  var lastPushTs=0,lastRemoteTs=0,lastFetchTs=0,lastOfficialOk=0;
+  // 旧 ntfy 同步通道已停用：本版不再向公开 topic 推送任何数据。
+  // 本地编辑保存在当前浏览器；官方开奖数据抓取和 data.json 缓存回退继续工作。
+  var lastPushTs=0,lastRemoteTs=0,PR=0;
   function applyData(){return false;}
   async function pull(){return false;}
-  async function push(){save();setSync('sync');}
+  async function push(){save();setSync('sync');return true;}
   function pk(){clearTimeout(ST);ST=setTimeout(push,500);}
 
+  var lastFetchTs=0;
+  var lastOfficialOk=0; // 最近一次官方API成功时间戳
+  function _mergeOfficialRow(qh,ds,nums4,s5){
+    // nums4: ['w','q','b','s'] 4个数字字符串；s5: 第5位
+    var existing=null;
+    for(var i=0;i<S.r.length;i++){if(S.r[i].q===qh){existing=S.r[i];break;}}
+    if(existing){
+      var officialNums=[String(nums4[0]),String(nums4[1]),String(nums4[2]),String(nums4[3])];
+      var changed=JSON.stringify(existing.n)!==JSON.stringify(officialNums) || String(existing.s)!==String(s5);
+      existing.n=officialNums;
+      existing.s=String(s5);
+      if(ds&&existing.d!==ds){existing.d=ds;changed=true;}
+      return changed;
+    }
+    S.r.push({q:qh,d:ds||'',n:[nums4[0],nums4[1],nums4[2],nums4[3]],s:s5});
+    return true;
+  }
+  async function autoFetchLottery(){
+    var now=Date.now();
+    var t=getBeijingTime();
+    var fast=(t.h===21&&t.m>=19&&t.m<50);
+    if(now-lastFetchTs<(fast?5000:60000))return;
+    lastFetchTs=now;
+    var officialOk=false;
+    // ====== 1) 优先请求官方体彩API（最终依据）======
+    try{
+      var directUrl='https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry?gameNo=350133&provinceId=0&pageSize=500&isVerify=1&pageNo=1';
+      var c2=new AbortController();var t2=setTimeout(function(){c2.abort();},8000);
+      var r2=await fetch(directUrl,{signal:c2.signal,cache:'no-store'});
+      clearTimeout(t2);
+      if(r2.ok){
+        var d=await r2.json();
+        if(d&&d.value&&d.value.list&&d.value.list.length){
+          var list=d.value.list;
+          var changed=false;
+          for(var j=0;j<list.length;j++){
+            var item=list[j];
+            var qh=item.lotteryDrawNum;
+            var nums=(item.lotteryDrawResult||'').split(/\s+/);
+            if(nums.length<5)continue;
+            var dt=item.lotteryDrawTime||'';
+            var ds='';
+            if(dt.length>=10){
+              var y=parseInt(dt.substring(0,4)),mo=parseInt(dt.substring(5,7))-1,da=parseInt(dt.substring(8,10));
+              var wd=new Date(y,mo,da).getDay();
+              var W2=['日','一','二','三','四','五','六'];
+              ds=String(mo+1).padStart(2,'0')+'/'+String(da).padStart(2,'0')+' '+W2[wd];
+            }
+            if(_mergeOfficialRow(qh,ds,[nums[0],nums[1],nums[2],nums[3]],nums[4]))changed=true;
+          }
+          if(changed){
+            S.r.sort(function(a,b){return String(a.q).localeCompare(String(b.q));});
+            ensureEmptyRows();
+            var lq2=getLatestQ();if(lq2)markRecent(lq2);
+            save();render();pk();
+          }
+          officialOk=true;
+          lastOfficialOk=Date.now();
+          setSync('ok');
+        }
+      }
+    }catch(e){}
+    // ====== 2) 官方失败时，降级使用 data.json 离线缓存 ======
+    if(!officialOk){
+      try{
+        var c=new AbortController();var t=setTimeout(function(){c.abort();},5000);
+        var r=await fetch('data.json?t='+Date.now(),{signal:c.signal,cache:'no-store'});
+        clearTimeout(t);
+        if(r.ok){
+          var dj=await r.json();
+          var rows=[];
+          if(dj.rows&&dj.rows.length){
+            // 新版格式 {rows:[{q,d,n:[4],s}]}
+            rows=dj.rows;
+          }else if(dj.rs){
+            // 紧凑字符串格式
+            rows=decompressRows(dj.rs);
+          }
+          if(rows.length){
+            var changed2=false;
+            for(var k=0;k<rows.length;k++){
+              var row=rows[k];
+              if(!row||!row.q)continue;
+              if(isValidRow(row)){
+                var ex=null;
+                for(var i=0;i<S.r.length;i++){if(S.r[i].q===row.q){ex=S.r[i];break;}}
+                if(!ex){S.r.push({q:row.q,d:row.d||'',n:[row.n[0],row.n[1],row.n[2],row.n[3]],s:row.s});changed2=true;}
+                else if(!isValidRow(ex)){ex.n=[row.n[0],row.n[1],row.n[2],row.n[3]];ex.s=row.s;if(row.d)ex.d=row.d;changed2=true;}
+              }
+            }
+            if(changed2){
+              S.r.sort(function(a,b){return String(a.q).localeCompare(String(b.q));});
+              ensureEmptyRows();
+              var lq=getLatestQ();if(lq)markRecent(lq);
+              save();render();pk();
+            }
+            // 仅缓存成功时不覆盖官方 ok 状态；若官方从未成功过，则标记 sync 表示用的是缓存
+            if(!lastOfficialOk)setSync('sync');
+          }
+        }
+      }catch(e){
+        if(!lastOfficialOk)setSync('err');
+      }
+    }
+  }
+  function ensureEmptyRows(){while(S.r.length>0&&S.r[S.r.length-1].q==='')S.r.pop();S.r.push({q:'',d:'',n:['','','',''],s:''});}
   // 不再持久化localDirty——避免普通用户被旧bug卡死无法接收远端
   // 仅在管理员编辑会话期间临时保护
     var _rts=parseInt(localStorage.getItem(K+'_rts')||'0');if(_rts>0)lastRemoteTs=_rts;
   render();
-  // 初始状态为"连接中"，真实 pull/官方API 成功后才置 ok
+  // 初始状态为黄色：本机保存模式，未启用云端多设备同步
   setSync('sync');
-  // 首屏：先全量拉一次
+  // 首屏：本地模式下跳过远端拉取，随后尝试官方开奖接口
   pull(true).then(function(got){
     lastNotifiedQ=getLatestQ()||lastNotifiedQ;
     setTimeout(function(){firstSyncDone=true;},3000);
     // 每次打开都从官网拉最新数据
     autoFetchLottery();
   });
-  // 每 8 秒拉一次远端，多设备同步
-  setInterval(function(){if(!document.hidden)pull(false);},8000);
+  // 远端多设备同步尚未启用
+
   setInterval(function(){render();},60000);
   // 每5秒检查data.json更新（开奖时段），其他时段60秒
   setInterval(function(){if(!document.hidden)autoFetchLottery();},5000);
@@ -1386,7 +1492,7 @@ document.addEventListener('click',function(e){
     }
   }
   setTimeout(scheduleAutoFetch,1000);
-  document.addEventListener('visibilitychange',function(){if(!document.hidden){pull(true);}});
+  document.addEventListener('visibilitychange',function(){if(!document.hidden){autoFetchLottery();}});
 })();
 (function(){
   // ===== 画规工具（iframe 内嵌） =====
